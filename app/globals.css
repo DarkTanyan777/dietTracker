@@ -1,0 +1,93 @@
+@import "tailwindcss";
+@import "react-calendar/dist/Calendar.css";
+
+:root {
+  --background: #f6f7f9;
+  --foreground: #111827;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.react-calendar.custom-calendar {
+  width: 100%;
+  border: none !important;
+  background: #ffffff !important;
+  color: #111827 !important;
+  font-family: inherit !important;
+}
+
+.react-calendar.custom-calendar button {
+  color: #374151 !important;
+  background: transparent !important;
+  opacity: 1 !important;
+}
+
+.react-calendar.custom-calendar .react-calendar__navigation {
+  height: 44px;
+  margin-bottom: 12px;
+}
+
+.react-calendar.custom-calendar .react-calendar__navigation button {
+  border-radius: 10px !important;
+  color: #111827 !important;
+  font-weight: 600 !important;
+}
+
+.react-calendar.custom-calendar .react-calendar__navigation button:enabled:hover,
+.react-calendar.custom-calendar .react-calendar__navigation button:enabled:focus {
+  background: #f3f4f6 !important;
+}
+
+.react-calendar.custom-calendar .react-calendar__month-view__weekdays {
+  color: #6b7280 !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase;
+}
+
+.react-calendar.custom-calendar .react-calendar__month-view__weekdays abbr {
+  text-decoration: none !important;
+}
+
+.react-calendar.custom-calendar .react-calendar__tile {
+  padding: 10px 6px !important;
+  border-radius: 10px !important;
+  background: transparent !important;
+  color: #374151 !important;
+  font-weight: 500 !important;
+}
+
+.react-calendar.custom-calendar .react-calendar__tile:enabled:hover,
+.react-calendar.custom-calendar .react-calendar__tile:enabled:focus {
+  background: #f3f4f6 !important;
+}
+
+.react-calendar.custom-calendar .react-calendar__tile--now {
+  background: #f3f4f6 !important;
+  color: #111827 !important;
+}
+
+.react-calendar.custom-calendar .react-calendar__tile--active {
+  background: #111827 !important;
+  color: #ffffff !important;
+}
+
+.react-calendar.custom-calendar .react-calendar__month-view__days__day--neighboringMonth {
+  color: #cbd5e1 !important;
+}
