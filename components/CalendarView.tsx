@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import Calendar from 'react-calendar'
 import { createClient } from '@/lib/supabase/client'
 import FoodLogModal from '@/components/FoodLogModal'
@@ -40,8 +40,18 @@ interface SavedDailyNote {
   mood: Mood
 }
 
+function getLocalDateString(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+
+  return `${year}-${month}-${day}`
+}
+
 export default function CalendarView() {
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date())
+  const [mounted, setMounted] = useState(false)
+
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [foodLogs, setFoodLogs] = useState<FoodLog[]>([])
   const [isModalOpen, setIsModalOpen] = useState(false)
 
@@ -51,71 +61,94 @@ export default function CalendarView() {
     null
   )
 
+  const [loadingDay, setLoadingDay] = useState(false)
   const [savingNote, setSavingNote] = useState(false)
   const [deletingNote, setDeletingNote] = useState(false)
 
   const supabase = useMemo(() => createClient(), [])
 
-  const selectedDateStr = selectedDate.toISOString().split('T')[0]
+  useEffect(() => {
+    setSelectedDate(new Date())
+    setMounted(true)
+  }, [])
 
-  const loadDayData = async () => {
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
+  const selectedDateStr = selectedDate ? getLocalDateString(selectedDate) : ''
 
-    if (userError || !user) {
-      console.error('Пользователь не найден:', userError?.message)
-      return
+  const loadDayData = useCallback(async () => {
+    if (!selectedDateStr) return
+
+    setLoadingDay(true)
+
+    try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser()
+
+      if (userError || !user) {
+        console.error('Пользователь не найден:', userError?.message)
+        setFoodLogs([])
+        setSavedDailyNote(null)
+        setDailyNote('')
+        setMood('normal')
+        return
+      }
+
+      const { data: logsData, error: logsError } = await supabase
+        .from('food_logs')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('log_date', selectedDateStr)
+        .order('created_at', { ascending: false })
+
+      if (logsError) {
+        console.error('Ошибка загрузки еды:', logsError.message)
+        setFoodLogs([])
+      } else {
+        setFoodLogs(logsData || [])
+      }
+
+      const { data: noteData, error: noteError } = await supabase
+        .from('daily_notes')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('note_date', selectedDateStr)
+        .maybeSingle()
+
+      if (noteError) {
+        console.error('Ошибка загрузки заметки:', noteError.message)
+        setSavedDailyNote(null)
+        setDailyNote('')
+        setMood('normal')
+        return
+      }
+
+      if (noteData) {
+        setSavedDailyNote({
+          id: noteData.id,
+          note: noteData.note || '',
+          mood: noteData.mood || 'normal',
+        })
+
+        setDailyNote(noteData.note || '')
+        setMood(noteData.mood || 'normal')
+      } else {
+        setSavedDailyNote(null)
+        setDailyNote('')
+        setMood('normal')
+      }
+    } finally {
+      setLoadingDay(false)
     }
-
-    const { data: logsData, error: logsError } = await supabase
-      .from('food_logs')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('log_date', selectedDateStr)
-      .order('created_at', { ascending: false })
-
-    if (logsError) {
-      console.error('Ошибка загрузки еды:', logsError.message)
-    } else {
-      setFoodLogs(logsData || [])
-    }
-
-    const { data: noteData, error: noteError } = await supabase
-      .from('daily_notes')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('note_date', selectedDateStr)
-      .maybeSingle()
-
-    if (noteError) {
-      console.error('Ошибка загрузки заметки:', noteError.message)
-      return
-    }
-
-    if (noteData) {
-      setSavedDailyNote({
-        id: noteData.id,
-        note: noteData.note || '',
-        mood: noteData.mood || 'normal',
-      })
-
-      setDailyNote(noteData.note || '')
-      setMood(noteData.mood || 'normal')
-    } else {
-      setSavedDailyNote(null)
-      setDailyNote('')
-      setMood('normal')
-    }
-  }
+  }, [selectedDateStr, supabase])
 
   useEffect(() => {
     loadDayData()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDateStr])
+  }, [loadDayData])
 
   const saveDailyNote = async () => {
+    if (!selectedDateStr) return
+
     setSavingNote(true)
 
     try {
@@ -129,13 +162,11 @@ export default function CalendarView() {
         return
       }
 
-      const noteText = dailyNote.trim()
-
       const { error } = await supabase.from('daily_notes').upsert(
         {
           user_id: user.id,
           note_date: selectedDateStr,
-          note: noteText,
+          note: dailyNote.trim(),
           mood,
           updated_at: new Date().toISOString(),
         },
@@ -155,16 +186,27 @@ export default function CalendarView() {
     }
   }
 
-  const deleteDailyNote = async () => {
-    if (!savedDailyNote) {
+  const deleteFoodLog = async (logId: string) => {
+    const confirmed = window.confirm('Удалить эту запись?')
+
+    if (!confirmed) return
+
+    const { error } = await supabase.from('food_logs').delete().eq('id', logId)
+
+    if (error) {
+      console.error('Ошибка удаления записи:', error.message)
       return
     }
+
+    await loadDayData()
+  }
+
+  const deleteDailyNote = async () => {
+    if (!savedDailyNote) return
 
     const confirmed = window.confirm('Удалить заметку за этот день?')
 
-    if (!confirmed) {
-      return
-    }
+    if (!confirmed) return
 
     setDeletingNote(true)
 
@@ -187,26 +229,6 @@ export default function CalendarView() {
     }
   }
 
-  const deleteFoodLog = async (logId: string) => {
-    const confirmed = window.confirm('Удалить эту запись?')
-
-    if (!confirmed) {
-      return
-    }
-
-    const { error } = await supabase
-      .from('food_logs')
-      .delete()
-      .eq('id', logId)
-
-    if (error) {
-      console.error('Ошибка удаления записи:', error.message)
-      return
-    }
-
-    await loadDayData()
-  }
-
   const groupedLogs = foodLogs.reduce<Record<string, FoodLog[]>>((acc, log) => {
     const type = log.meal_type || 'snack'
 
@@ -217,6 +239,16 @@ export default function CalendarView() {
     acc[type].push(log)
     return acc
   }, {})
+
+  if (!mounted || !selectedDate) {
+    return (
+      <div className="mx-auto max-w-6xl px-4 py-6">
+        <div className="rounded-2xl border border-gray-200 bg-white p-6 text-gray-500">
+          Загрузка...
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
@@ -258,7 +290,7 @@ export default function CalendarView() {
           <div className="rounded-2xl border border-gray-200 bg-white p-4">
             <p className="text-sm text-gray-500">Записей за день</p>
             <p className="mt-1 text-3xl font-semibold text-gray-950">
-              {foodLogs.length}
+              {loadingDay ? '...' : foodLogs.length}
             </p>
           </div>
         </aside>
@@ -285,7 +317,11 @@ export default function CalendarView() {
             </div>
 
             <div className="mt-5 space-y-5">
-              {foodLogs.length === 0 ? (
+              {loadingDay ? (
+                <div className="rounded-xl border border-gray-200 p-8 text-center text-sm text-gray-500">
+                  Загружаем записи...
+                </div>
+              ) : foodLogs.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-gray-200 p-8 text-center">
                   <div className="text-3xl">🥗</div>
                   <p className="mt-3 font-medium text-gray-900">
@@ -299,9 +335,7 @@ export default function CalendarView() {
                 Object.entries(mealLabels).map(([type, label]) => {
                   const logs = groupedLogs[type] || []
 
-                  if (logs.length === 0) {
-                    return null
-                  }
+                  if (logs.length === 0) return null
 
                   return (
                     <section key={type}>
