@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useForm } from 'react-hook-form'
+import { getLocalDateString } from '@/lib/date'
 
 type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack'
 
@@ -46,22 +47,25 @@ export default function FoodLogModal({ date, onClose }: FoodLogModalProps) {
         return
       }
 
-      const dateStr = date.toISOString().split('T')[0]
+      const foodName = data.food_name.trim()
+
+      if (!foodName) {
+        console.error('Название еды пустое')
+        return
+      }
+
+      const dateStr = getLocalDateString(date)
 
       const payload = {
         user_id: user.id,
         log_date: dateStr,
-        food_name: data.food_name.trim(),
+        food_name: foodName,
         meal_type: data.meal_type,
-
-        // Оставляем, потому что эти поля есть в таблице
         calories: 0,
         protein: 0,
         carbs: 0,
         fat: 0,
       }
-
-      console.log('Добавляем запись:', payload)
 
       const { error } = await supabase.from('food_logs').insert(payload)
 
@@ -102,7 +106,7 @@ export default function FoodLogModal({ date, onClose }: FoodLogModalProps) {
             type="button"
             onClick={onClose}
             disabled={loading}
-            className="rounded-lg px-2 py-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+            className="rounded-lg px-2 py-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50"
           >
             ✕
           </button>
@@ -119,7 +123,8 @@ export default function FoodLogModal({ date, onClose }: FoodLogModalProps) {
               {...register('food_name', {
                 required: 'Введите название продукта или блюда',
                 validate: (value) =>
-                  value.trim().length > 0 || 'Введите название продукта или блюда',
+                  value.trim().length > 0 ||
+                  'Введите название продукта или блюда',
               })}
               className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 outline-none focus:border-gray-400"
               placeholder="Например: гречка с курицей"

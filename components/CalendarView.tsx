@@ -5,6 +5,7 @@ import Calendar from 'react-calendar'
 import { createClient } from '@/lib/supabase/client'
 import FoodLogModal from '@/components/FoodLogModal'
 import { FoodLog } from '@/types'
+import { getLocalDateString } from '@/lib/date'
 
 const mealLabels = {
   breakfast: 'Завтрак',
@@ -38,14 +39,6 @@ interface SavedDailyNote {
   id: string
   note: string
   mood: Mood
-}
-
-function getLocalDateString(date: Date) {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-
-  return `${year}-${month}-${day}`
 }
 
 export default function CalendarView() {
@@ -470,7 +463,7 @@ export default function CalendarView() {
         </main>
       </div>
 
-      {isModalOpen && (
+      {isModalOpen && selectedDate && (
         <FoodLogModal
           date={selectedDate}
           onClose={() => {
